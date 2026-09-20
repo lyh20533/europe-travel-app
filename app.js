@@ -234,7 +234,17 @@ function fetchDataFromDB() {
       
       // Show offline banner
       const banner = document.getElementById('offlineIndicator');
-      if (banner) banner.style.display = 'block';
+      if (banner) {
+        banner.style.display = 'block';
+        const span = banner.querySelector('span');
+        if (span) {
+          if (window.location.protocol === 'file:') {
+            span.innerText = "📂 로컬 파일 직접 열기 모드 (SQLite DB 실시간 연동을 위해 http://localhost:8085 로 접속하세요)";
+          } else {
+            span.innerText = "오프라인 모드 작동 중 (데이터 연결 없이 저장된 15박 16일 일정 & 지도 & 팁 완벽 조회가 가능합니다)";
+          }
+        }
+      }
 
       // Restore from localStorage backup
       try {
