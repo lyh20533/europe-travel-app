@@ -254,13 +254,26 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             cursor.execute('SELECT * FROM expenses ORDER BY date DESC, id DESC')
             expenses = [dict(r) for r in cursor.fetchall()]
 
+            # Checklist Indices State
+            cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
+            cursor.execute('SELECT indices_json FROM checklist_state WHERE id = 1')
+            chk_row = cursor.fetchone()
+            checklist_indices = json.loads(chk_row[0]) if chk_row and chk_row[0] else []
+
+            # Custom Checklist Items
+            cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
+            cursor.execute('SELECT * FROM custom_checklist')
+            custom_checklist = [dict(r) for r in cursor.fetchall()]
+
             conn.close()
 
             response_data = {
                 "schedule": schedules,
                 "bookings": bookings,
                 "routes": routes,
-                "expenses": expenses
+                "expenses": expenses,
+                "checklist_indices": checklist_indices,
+                "custom_checklist": custom_checklist
             }
 
             self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))

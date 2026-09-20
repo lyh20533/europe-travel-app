@@ -197,6 +197,12 @@ function fetchDataFromDB() {
       if (data.expenses) {
         travelData.expenses = data.expenses;
       }
+      if (data.checklist_indices && Array.isArray(data.checklist_indices)) {
+        mergeChecklistIndices(data.checklist_indices);
+      }
+      if (data.custom_checklist && Array.isArray(data.custom_checklist)) {
+        mergeCustomChecklistItems(data.custom_checklist);
+      }
 
       // Save to localStorage for instant offline access
       try {
@@ -2317,15 +2323,7 @@ window.initChecklistState = function() {
     .then(res => res.json())
     .then(data => {
       if (data && Array.isArray(data.indices)) {
-        checkboxes.forEach((chk, index) => {
-          if (!chk.classList.contains('custom-chk')) {
-            chk.checked = data.indices.includes(index);
-          }
-        });
-        updateChecklistProgress();
-        try {
-          localStorage.setItem('italy_checklist_checked_indices', JSON.stringify(data.indices));
-        } catch(e) {}
+        mergeChecklistIndices(data.indices);
       }
     })
     .catch(() => {});
@@ -2345,13 +2343,78 @@ window.initChecklistState = function() {
     .then(res => res.json())
     .then(data => {
       if (Array.isArray(data)) {
-        customChecklistItems = data;
-        renderCustomChecklistItems();
-        updateChecklistProgress();
-        saveCustomChecklistItemsState();
+        mergeCustomChecklistItems(data);
       }
     })
     .catch(() => {});
+};
+
+window.mergeChecklistIndices = function(dbIndices) {
+  let localIndices = [];
+  try {
+    const saved = localStorage.getItem('italy_checklist_checked_indices');
+    if (saved) localIndices = JSON.parse(saved) || [];
+  } catch(e) {}
+
+  const mergedSet = new Set([...localIndices, ...dbIndices]);
+  const mergedArr = Array.from(mergedSet);
+
+  const checkboxes = document.querySelectorAll('#tab-checklist .chk-item');
+  if (checkboxes && checkboxes.length > 0) {
+    checkboxes.forEach((chk, index) => {
+      if (!chk.classList.contains('custom-chk')) {
+        chk.checked = mergedArr.includes(index);
+      }
+    });
+  }
+
+  try {
+    localStorage.setItem('italy_checklist_checked_indices', JSON.stringify(mergedArr));
+  } catch(e) {}
+
+  updateChecklistProgress();
+};
+
+window.mergeCustomChecklistItems = function(dbCustomItems) {
+  let localCustomItems = [];
+  try {
+    const saved = localStorage.getItem('italy_custom_checklist_items');
+    if (saved) localCustomItems = JSON.parse(saved) || [];
+  } catch(e) {}
+
+  const itemMap = new Map();
+
+  localCustomItems.forEach(item => {
+    if (item && item.id) itemMap.set(item.id, item);
+  });
+
+  dbCustomItems.forEach(dbItem => {
+    if (dbItem && dbItem.id) {
+      if (itemMap.has(dbItem.id)) {
+        const localItem = itemMap.get(dbItem.id);
+        const isChecked = (localItem.checked || dbItem.checked) ? 1 : 0;
+        itemMap.set(dbItem.id, { ...localItem, ...dbItem, checked: isChecked });
+      } else {
+        itemMap.set(dbItem.id, dbItem);
+      }
+    }
+  });
+
+  customChecklistItems = Array.from(itemMap.values());
+  saveCustomChecklistItemsState();
+  renderCustomChecklistItems();
+  updateChecklistProgress();
+
+  // Push local items to DB if missing from DB
+  localCustomItems.forEach(localItem => {
+    if (localItem && localItem.id && !dbCustomItems.some(x => x.id === localItem.id)) {
+      fetch('/api/custom-checklist/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localItem)
+      }).catch(() => {});
+    }
+  });
 };
 
 // =========================================================
