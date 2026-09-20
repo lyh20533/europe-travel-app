@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1E2A38">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="유럽여행">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/000000/airplane-take-off.png">
+  <title>유럽 여행 스케줄러 | 15박 16일 부다페스트 & 이탈리아 일정 관리 (DB 연동)</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Sans+KR:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Leaflet CSS for Interactive Route Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="styles.css?v=20260920_05">
+  <script>
+    window.initGoogleMapsApi = function() {
+      if (typeof window.onGoogleMapsReady === 'function') window.onGoogleMapsReady();
+    };
+  </script>
+</head>
+<body>
+  <!-- Offline Alert Banner -->
+  <div id="offlineIndicator" style="display:none; background:#d9534f; color:#ffffff; text-align:center; padding:10px 16px; font-weight:700; font-size:0.9rem; box-shadow:0 2px 8px rgba(0,0,0,0.2); position:sticky; top:0; z-index:99999;">
+    <i class="fa-solid fa-wifi-slash"></i> <span>오프라인 모드 작동 중 (데이터 연결 없이 저장된 15박 16일 일정 & 지도 & 팁 완벽 조회가 가능합니다)</span>
+  </div>
+
+  <div id="app">
+    <!-- Top Header -->
+    <header class="main-header">
+      <div class="header-container">
+        <div class="brand">
+          <span class="brand-badge">2026 GRAND EUROPE TRIP (SQLITE DB VERIFIED)</span>
+          <h1 class="brand-title">Journey Across Europe</h1>
+          <p class="brand-subtitle">부다페스트 · 돌로미티 · 베네치아 · 로마 · 포시타노 · 나폴리 (15박 16일)</p>
+        </div>
+
+        <div class="dday-card">
+          <div class="dday-title"><i class="fa-regular fa-clock"></i> 인천 출발까지</div>
+          <div class="dday-timer" id="ddayTimer">D-00일 00:00:00</div>
+          <div class="dday-date">2026.09.23 12:35 출발</div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-tab="calendar"><i class="fa-regular fa-calendar-days"></i> 캘린더 뷰</button>
+        <button class="nav-btn" data-tab="timeline"><i class="fa-solid fa-timeline"></i> 타임라인 뷰</button>
+        <button class="nav-btn" data-tab="cityguide"><i class="fa-solid fa-utensils"></i> 도시별 명소·맛집·시간표</button>
+        <button class="nav-btn" data-tab="maps"><i class="fa-solid fa-map-marked-alt"></i> 구글맵 경로 & 돌로미티</button>
+        <button class="nav-btn" data-tab="route"><i class="fa-solid fa-route"></i> 도시별 동선 & 숙소</button>
+        <button class="nav-btn" data-tab="bookings"><i class="fa-solid fa-ticket"></i> 바우처 금고</button>
+        <button class="nav-btn" data-tab="budget"><i class="fa-solid fa-calculator"></i> 경비·날씨·핫라인</button>
+        <button class="nav-btn" data-tab="checklist"><i class="fa-solid fa-clipboard-check"></i> 필수 준비물 & 팁</button>
+      </nav>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Quick Filter & Search Bar -->
+      <div class="search-filter-bar no-print">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="도시, 숙소, 맛집, 비행기편, 기차, 투어 검색 (예: 돌로미티, 바티칸, 피자, 세체다...)">
+        </div>
+        
+        <div class="filter-pills" id="categoryFilters">
+          <button class="filter-pill active" data-category="all">전체 일정</button>
+          <button class="filter-pill" data-category="flight"><i class="fa-solid fa-plane"></i> 항공편</button>
+          <button class="filter-pill" data-category="hotel"><i class="fa-solid fa-hotel"></i> 숙소 (8곳)</button>
+          <button class="filter-pill" data-category="train"><i class="fa-solid fa-train"></i> 초고속 기차</button>
+          <button class="filter-pill" data-category="car"><i class="fa-solid fa-car"></i> 렌터카/교통</button>
+          <button class="filter-pill" data-category="tour"><i class="fa-solid fa-star"></i> 주요 투어/액티비티</button>
+          <button class="filter-pill highlight" data-category="pending"><i class="fa-solid fa-triangle-exclamation"></i> 현지 구매/체크 필요 (3곳)</button>
+        </div>
+      </div>
+
+      <!-- Tab 1: Integrated 15-Night 16-Day Calendar View -->
+      <section id="tab-calendar" class="tab-pane active">
+        <div class="calendar-header-actions">
+          <h2 class="section-title"><i class="fa-solid fa-calendar-week"></i> 15박 16일 통합 캘린더 (한눈에 보는 전일정)</h2>
+          <div class="header-right-actions">
+            <div class="integrated-badge">
+              <i class="fa-solid fa-database" style="color:var(--gold-accent);"></i> SQLite DB 연동 완료 | 2026.09.23 ~ 10.08 (16일)
+            </div>
+            <button class="btn-print" onclick="window.print()"><i class="fa-solid fa-print"></i> 일정 인쇄 / PDF 저장</button>
+          </div>
+        </div>
+
+        <div class="calendar-grid-container" id="calendarView">
+          <!-- Rendered by app.js from DB -->
+        </div>
+      </section>
+
+      <!-- Tab 2: Timeline View with 1-Depth Master-Detail Hierarchy -->
+      <section id="tab-timeline" class="tab-pane">
+        <!-- Level 1: Master Overview (All 16 Days Card Grid) -->
+        <div id="timelineOverview">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+            <div>
+              <h2 class="section-title" style="margin-bottom:4px;"><i class="fa-solid fa-calendar-day"></i> 15박 16일 일차별 타임라인 (Master Overview)</h2>
+              <p style="color:var(--text-muted); font-size:0.92rem;">원하는 일차 카드를 클릭하여 <strong>1-Depth 세부 타임라인 뷰</strong>로 들어가 세부 장소/일정을 직접 추가, 수정, 삭제하세요.</p>
+            </div>
+            <button type="button" class="btn-primary-gold" onclick="openAddScheduleModal()">
+              <i class="fa-solid fa-plus"></i> ➕ 새 여행 일차 추가 (DB 저장)
+            </button>
+          </div>
+          
+          <div class="timeline-days-grid" id="timelineDaysGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;">
+            <!-- Rendered by app.js from DB -->
+          </div>
+        </div>
+
+        <!-- Level 2: 1-Depth Detailed Timeline View for Selected Day -->
+        <div id="timelineDetailView" style="display:none;">
+          <div style="background:var(--bg-card); padding:20px; border-radius:var(--radius-md); border:1px solid var(--border-color); margin-bottom:20px; box-shadow:var(--shadow-sm);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+              <button type="button" onclick="closeTimelineDayDetail()" style="background:var(--navy-royal); color:#ffffff; border:none; padding:8px 18px; border-radius:6px; font-weight:700; font-size:0.92rem; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.12);">
+                <i class="fa-solid fa-arrow-left"></i> ⬅️ 전체 16일 일차 목록으로 돌아가기
+              </button>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn-primary-gold" onclick="focusMapOnCurrentActiveDay()">
+                  <i class="fa-solid fa-map-location-dot"></i> 🗺️ 이 일차 지도 핀 & 루트 라이브 보기
+                </button>
+                <button type="button" onclick="openAddWaypointModal()" style="background:var(--terracotta); color:#ffffff; border:none; padding:9px 16px; border-radius:6px; font-weight:700; font-size:0.9rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(0,0,0,0.12);">
+                  <i class="fa-solid fa-plus"></i> ➕ 이 날짜에 새 세부 일정/장소 추가 (1-Depth)
+                </button>
+              </div>
+            </div>
+
+            <div id="activeDayHeader" style="border-top:1px dashed var(--border-color); padding-top:14px; margin-top:10px;">
+              <!-- Dynamic header info rendered by app.js -->
+            </div>
+          </div>
+
+          <!-- Drag & Drop Interactive Tip Box -->
+          <div style="background:#FFF8E7; border:1px solid #E6C875; padding:12px 18px; border-radius:8px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <span style="font-size:0.9rem; color:var(--text-dark); font-weight:600;">
+              <i class="fa-solid fa-up-down-left-right" style="color:var(--terracotta); margin-right:6px;"></i> 💡 <strong>드래그 & 드롭 순서 변경:</strong> 각 카드 왼쪽 핸들(<i class="fa-solid fa-grip-vertical"></i>)을 끌어 이동 순서를 자유롭게 변경하세요. 변경 순서는 SQLite DB에 즉시 영구 저장됩니다.
+            </span>
+          </div>
+
+          <!-- 1-Depth Vertical Timeline List for the Active Day -->
+          <div class="timeline-container" id="dayWaypointsTimeline">
+            <!-- Rendered by app.js from DB -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: City Sightseeing, Food & Time Guide -->
+      <section id="tab-cityguide" class="tab-pane">
+        <h2 class="section-title"><i class="fa-solid fa-utensils"></i> 도시별 명소 · 정통 맛집 · 골든타임 추천 가이드 (구글 평점/영업시간/브레이크타임)</h2>
+        
+        <div class="city-guide-selector" id="cityGuidePills">
+          <!-- Rendered by app.js -->
+        </div>
+
+        <div class="city-guide-container" id="cityGuideContent">
+          <!-- Rendered by app.js -->
+        </div>
+      </section>
+
+      <!-- Tab 4: Interactive Map View with Day-by-Day Pins & Routes (Google Maps API) -->
+      <section id="tab-maps" class="tab-pane">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <h2 class="section-title" style="margin-bottom:0;"><i class="fa-brands fa-google" style="color:var(--terracotta);"></i> Google Maps API 일차별 지점 핀 & 이동 경로 인터랙티브 지도</h2>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <button type="button" onclick="openOfficialGoogleMapsRoute()" style="background:var(--terracotta); color:#ffffff; border:none; padding:6px 14px; border-radius:6px; font-size:0.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+              <i class="fa-solid fa-map-location-dot" style="color:var(--gold-accent);"></i> 🗺️ 실제 Google Maps 웹/앱 경로 열기 ↗️
+            </button>
+            <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-left:6px;">지도 모드:</span>
+            <button type="button" onclick="setGoogleMapType('roadmap')" style="padding:4px 10px; font-size:0.8rem; font-weight:700; background:var(--navy-royal); color:#fff; border:none; border-radius:4px; cursor:pointer;">🗺️ 기본 지도</button>
+            <button type="button" onclick="setGoogleMapType('satellite')" style="padding:4px 10px; font-size:0.8rem; font-weight:700; background:var(--terracotta); color:#fff; border:none; border-radius:4px; cursor:pointer;">🛰️ 위성 지도</button>
+            <button type="button" onclick="setGoogleMapType('hybrid')" style="padding:4px 10px; font-size:0.8rem; font-weight:700; background:var(--gold-primary); color:var(--text-dark); border:none; border-radius:4px; cursor:pointer;">🏙️ 위성+지명</button>
+            <button type="button" onclick="setGoogleMapType('terrain')" style="padding:4px 10px; font-size:0.8rem; font-weight:700; background:var(--green-alpine); color:#fff; border:none; border-radius:4px; cursor:pointer;">⛰️ 지형 지도</button>
+          </div>
+        </div>
+        
+        <!-- Day Selector Toolbar -->
+        <div class="day-filter-toolbar" style="margin-bottom:14px; background:var(--bg-card); padding:14px 20px; border-radius:var(--radius-md); border:1px solid var(--border-color); display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; box-shadow:var(--shadow-sm);">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-weight:700; color:var(--navy-royal); font-size:0.95rem;">
+              <i class="fa-solid fa-filter" style="color:var(--gold-accent);"></i> 📍 Google Maps 일차별 핀 & 경로 선택:
+            </span>
+            <select id="mapDaySelect" onchange="filterMapByDay(this.value)" style="padding:8px 16px; font-weight:700; border-radius:6px; border:1px solid var(--border-dark); background:var(--bg-main); color:var(--navy-royal); font-size:0.92rem; cursor:pointer;">
+              <option value="all">📍 전체 16일 전일정 핀 & 경로 한눈에 보기</option>
+              <!-- Rendered dynamically by app.js -->
+            </select>
+          </div>
+          <div id="mapSelectedDayInfo" style="font-size:0.9rem; font-weight:700; color:var(--terracotta);">
+            Google Maps API: 전체 16개 거점 핀 및 경로 연동 중
+          </div>
+        </div>
+
+        <div class="map-wrapper">
+          <div id="interactiveMap" style="height: 540px; border-radius: var(--radius-md); border: 1px solid var(--border-color);"></div>
+          <div class="map-overlay-badge">
+            <i class="fa-brands fa-google"></i> Google Maps API 선택 일차별 실시간 핀 & 루트 인터랙션
+          </div>
+        </div>
+
+        <div class="saved-routes-section" style="margin-top: 35px;">
+          <div class="routes-header">
+            <div>
+              <h3 style="font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--navy-royal);">
+                <i class="fa-solid fa-mountain-sun" style="color: var(--green-alpine);"></i> 돌로미티 & 주요 구간 저장된 구글 맵 경로
+              </h3>
+              <p style="font-size: 0.9rem; color: var(--text-muted);">필요할 때마다 클릭하여 구글 맵 앱/웹에서 즉시 길찾기를 실행하거나 새로운 커스텀 경로를 저장하세요.</p>
+            </div>
+            
+            <button class="btn-primary-gold" id="btnOpenAddRouteModal">
+              <i class="fa-solid fa-plus"></i> 나만의 구글 맵 경로 추가하기
+            </button>
+          </div>
+
+          <div class="routes-grid" id="savedRoutesGrid">
+            <!-- Rendered by app.js from DB -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: Route & Cities View -->
+      <section id="tab-route" class="tab-pane">
+        <h2 class="section-title"><i class="fa-solid fa-route"></i> 방문 도시별 순환 동선 & 숙소 가이드</h2>
+        <div class="cities-grid" id="citiesView">
+          <!-- Rendered by app.js -->
+        </div>
+      </section>
+
+      <!-- Tab 6: Bookings Vault -->
+      <section id="tab-bookings" class="tab-pane">
+        <h2 class="section-title"><i class="fa-solid fa-vault"></i> 예약 확정 바우처 & 티켓 금고</h2>
+        <div class="bookings-grid" id="bookingsView">
+          <!-- Rendered by app.js from DB -->
+        </div>
+      </section>
+
+      <!-- Tab 7: Budget, Expense Splitter, Phrasebook, Weather & Emergency Hotline -->
+      <section id="tab-budget" class="tab-pane">
+        <h2 class="section-title"><i class="fa-solid fa-calculator"></i> 실시간 가계부 · 정산기 · 여행 회화 · 긴급 핫라인</h2>
+        
+        <div class="budget-weather-grid">
+          
+          <!-- Card 1: Multi-Currency Calculator with Quick Presets -->
+          <div class="util-card">
+            <div class="util-card-header">
+              <i class="fa-solid fa-money-bill-transfer"></i>
+              <h3>실시간 유럽 환율 계산기 (원터치 버튼)</h3>
+            </div>
+            <div class="converter-body">
+              <div class="currency-row">
+                <label>유로 (EUR €)</label>
+                <input type="number" id="inputEUR" value="100" placeholder="EUR 유로">
+                <span class="calc-result" id="resEUR">약 ₩148,000</span>
+              </div>
+              <div class="quick-preset-row">
+                <button class="preset-btn" onclick="setCurrencyValue('EUR', 5)">€5</button>
+                <button class="preset-btn" onclick="setCurrencyValue('EUR', 15)">€15</button>
+                <button class="preset-btn" onclick="setCurrencyValue('EUR', 30)">€30</button>
+                <button class="preset-btn" onclick="setCurrencyValue('EUR', 50)">€50</button>
+                <button class="preset-btn" onclick="setCurrencyValue('EUR', 100)">€100</button>
+              </div>
+
+              <div class="currency-row" style="margin-top:16px;">
+                <label>포린트 (HUF Ft)</label>
+                <input type="number" id="inputHUF" value="10000" placeholder="HUF 포린트">
+                <span class="calc-result" id="resHUF">약 ₩38,000</span>
+              </div>
+              <div class="quick-preset-row">
+                <button class="preset-btn" onclick="setCurrencyValue('HUF', 1000)">1,000 Ft</button>
+                <button class="preset-btn" onclick="setCurrencyValue('HUF', 3000)">3,000 Ft</button>
+                <button class="preset-btn" onclick="setCurrencyValue('HUF', 5000)">5,000 Ft</button>
+                <button class="preset-btn" onclick="setCurrencyValue('HUF', 10000)">10,000 Ft</button>
+              </div>
+
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-top:12px;">
+                * 1 EUR ≈ ₩1,480 / 100 HUF ≈ ₩380 환율 자동 적용
+              </p>
+            </div>
+          </div>
+
+          <!-- Card 2: Shared Expense Ledger & DB Persistence -->
+          <div class="util-card" style="grid-column: span 2;">
+            <div class="util-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <i class="fa-solid fa-receipt" style="color:var(--terracotta);"></i>
+                <h3 style="display:inline-block; margin-left:6px;">현지 공동 지출 가계부 (SQLite DB 실시간 연동)</h3>
+              </div>
+              <span class="modal-badge" style="background:var(--navy-royal);">공동 경비 기록</span>
+            </div>
+            
+            <!-- Add Expense Form -->
+            <div class="expense-form-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px; background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color);">
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">날짜</label>
+                <input type="date" id="expDate" value="2026-09-24" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+              <div style="grid-column: span 2;">
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">항목 명칭</label>
+                <input type="text" id="expItem" placeholder="예: 부다페스트 멘자 굴라쉬 점심 식사" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">통화</label>
+                <select id="expCurr" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                  <option value="EUR">유로 (EUR €)</option>
+                  <option value="HUF">포린트 (HUF Ft)</option>
+                  <option value="KRW">원화 (KRW ₩)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">금액</label>
+                <input type="number" id="expAmount" placeholder="예: 45" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:4px;">카테고리</label>
+                <select id="expCat" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+                  <option value="식비">식비</option>
+                  <option value="교통">교통</option>
+                  <option value="티켓/관광">티켓/관광</option>
+                  <option value="숙소">숙소</option>
+                  <option value="쇼핑/기타">쇼핑/기타</option>
+                </select>
+              </div>
+              <div style="display:flex; align-items:flex-end;">
+                <button type="button" class="btn-primary-gold" onclick="addExpenseItem()" style="width:100%; padding:9px; font-weight:700;"><i class="fa-solid fa-plus"></i> 지출 기록</button>
+              </div>
+            </div>
+
+            <!-- Expense Summary Box -->
+            <div id="expenseSummaryBox" class="expense-split-box" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:16px; background:#fff8e7; padding:14px; border-radius:8px; border:1px solid #e6c875;">
+              <!-- Rendered by app.js -->
+            </div>
+
+            <!-- Expense Table -->
+            <div style="overflow-x:auto;">
+              <table class="expense-table" style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+                <thead>
+                  <tr style="background:var(--navy-royal); color:#ffffff; text-align:left;">
+                    <th style="padding:10px;">날짜</th>
+                    <th style="padding:10px;">항목 명칭</th>
+                    <th style="padding:10px;">현지 금액</th>
+                    <th style="padding:10px;">원화 환산</th>
+                    <th style="padding:10px;">분류</th>
+                    <th style="padding:10px; text-align:center;">삭제</th>
+                  </tr>
+                </thead>
+                <tbody id="expenseTableBody">
+                  <!-- Rendered by app.js from DB -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Card 3: Pre-booked Expense Overview -->
+          <div class="util-card">
+            <div class="util-card-header">
+              <i class="fa-solid fa-chart-pie"></i>
+              <h3>사전 확정 경비 결제 요약</h3>
+            </div>
+            <ul class="expense-summary-list">
+              <li><span>🛫 아시아나 국제선 왕복 (2인):</span> <strong>₩3,357,200</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(1인 ₩1,678,600 × 2명)</span></li>
+              <li><span>✈️ 유럽 내 이동 항공 2편 (2인):</span> <strong>₩354,600</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(라이언에어 ₩119.2K + 위즈에어 ₩235.4K)</span></li>
+              <li><span>🏨 숙소 전일정 (8곳 15박):</span> <strong>₩3,860,992</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(포시타노/발가르데나 등 8곳 실결제액)</span></li>
+              <li><span>🚗 Sicily By Car 렌터카 (5일):</span> <strong>₩380,000</strong></li>
+              <li><span>🚆 초고속 열차 2편 (2인):</span> <strong>₩280,000</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(이탈로 ₩150K + 트랜이탈리아 ₩130K)</span></li>
+              <li><span>🇻🇦 바티칸 투어 & 산장 주차:</span> <strong>₩179,200</strong> <span style="font-size:0.75rem; color:var(--text-muted);">(바티칸 ₩120K + 트레치메 ₩59.2K)</span></li>
+              <li class="total-row"><span>총 사전 예약 합계:</span> <strong>₩8,411,992</strong></li>
+            </ul>
+          </div>
+
+          <!-- Card 4: Weather & Clothing Guide -->
+          <div class="util-card">
+            <div class="util-card-header">
+              <i class="fa-solid fa-cloud-sun"></i>
+              <h3>9월 말~10월 초 도시별 날씨 & 복장 팁</h3>
+            </div>
+            <div class="weather-guide-list">
+              <div class="weather-item">
+                <span class="city-name">부다페스트</span>
+                <span class="temp-badge">12°C ~ 21°C</span>
+                <p>선선한 가을 날씨. 밤 강바람이 차므로 겉옷/트렌치코트 필수.</p>
+              </div>
+              <div class="weather-item cold">
+                <span class="city-name">돌로미티 알프스 (유튜브 분석)</span>
+                <span class="temp-badge cold">4°C ~ 14°C</span>
+                <p>⚠️ 일교차 심함! 경량 패딩, 바람막이 자켓, 트레킹화, 핫팩, 선글라스 필수.</p>
+              </div>
+              <div class="weather-item">
+                <span class="city-name">베네치아 & 로마</span>
+                <span class="temp-badge">16°C ~ 25°C</span>
+                <p>쾌적하고 따뜻함. 낮에는 반팔/셔츠, 아침 저녁 가벼운 가디건.</p>
+              </div>
+              <div class="weather-item warm">
+                <span class="city-name">포시타노 & 나폴리</span>
+                <span class="temp-badge warm">18°C ~ 26°C</span>
+                <p>따뜻한 지중해 날씨. 낮 해수욕 가능! 선글라스, 수영복, 선크림 준비.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 5: Interactive Essential Travel Phrasebook with Audio TTS -->
+          <div class="util-card" style="grid-column: span 2;">
+            <div class="util-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <i class="fa-solid fa-comments" style="color:var(--navy-royal);"></i>
+                <h3 style="display:inline-block; margin-left:6px;">이탈리아어 & 헝가리어 현지 필수 여행 회화장 (🔊 원터치 발음 듣기)</h3>
+              </div>
+              <span class="modal-badge">현지 회화 팁</span>
+            </div>
+            
+            <div class="phrase-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:14px; margin-top:10px;">
+              
+              <!-- Food & Dining Phrases -->
+              <div class="phrase-card" style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color);">
+                <h4 style="color:var(--terracotta); font-size:1.02rem; margin-bottom:10px;"><i class="fa-solid fa-utensils"></i> 🍝 식당 & 카페 필수 표기</h4>
+                
+                <div class="phrase-item" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed var(--border-color);">
+                  <div style="font-weight:700; color:var(--navy-royal);">Il conto, per favore! <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(일 콘토, 페르 파보레!)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"계산서 좀 가져다주세요" (이탈리아어)</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Il conto, per favore!', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Il conto, per favore!')">📋 복사</button>
+                  </div>
+                </div>
+
+                <div class="phrase-item" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed var(--border-color);">
+                  <div style="font-weight:700; color:var(--navy-royal);">Un caffè, per favore. <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(운 카페, 페르 파보레)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"에스프레소 한 잔 주세요"</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Un caffè, per favore.', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Un caffè, per favore.')">📋 복사</button>
+                  </div>
+                </div>
+
+                <div class="phrase-item">
+                  <div style="font-weight:700; color:var(--navy-royal);">Köszönöm! <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(쿠수놈!)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"감사합니다" (헝가리어)</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Köszönöm', 'hu-HU')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Köszönöm!')">📋 복사</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Rental Car & Transport Phrases -->
+              <div class="phrase-card" style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color);">
+                <h4 style="color:var(--navy-royal); font-size:1.02rem; margin-bottom:10px;"><i class="fa-solid fa-car"></i> 🚗 렌터카 & 대중교통</h4>
+                
+                <div class="phrase-item" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed var(--border-color);">
+                  <div style="font-weight:700; color:var(--navy-royal);">Faccia il pieno, per favore. <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(파차 일 피에노, 페르 파보레)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"휘발유(디젤) 만유(Full) 채워주세요"</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Faccia il pieno, per favore.', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Faccia il pieno, per favore.')">📋 복사</button>
+                  </div>
+                </div>
+
+                <div class="phrase-item">
+                  <div style="font-weight:700; color:var(--navy-royal);">Dov'è il parcheggio? <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(도베 일 파르케조?)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"주차장이 어디에 있나요?"</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Dov\'è il parcheggio?', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Dov\'è il parcheggio?')">📋 복사</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Assistance & Emergency Phrases -->
+              <div class="phrase-card" style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color);">
+                <h4 style="color:#a84324; font-size:1.02rem; margin-bottom:10px;"><i class="fa-solid fa-hand-holding-medical"></i> 🆘 안내 & 긴급 상황</h4>
+                
+                <div class="phrase-item" style="margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed var(--border-color);">
+                  <div style="font-weight:700; color:var(--navy-royal);">Dov'è il bagno? <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(도베 일 바뇨?)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"화장실이 어디에 있나요?" (필수!)</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Dov\'è il bagno?', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Dov\'è il bagno?')">📋 복사</button>
+                  </div>
+                </div>
+
+                <div class="phrase-item">
+                  <div style="font-weight:700; color:#a84324;">Aiuto! Mi può aiutare? <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted);">(아이우토! 미 퓌 오 아유타레?)</span></div>
+                  <div style="font-size:0.85rem; color:var(--text-body); margin-top:2px;">"도와주세요! 도와주실 수 있나요?" (긴급)</div>
+                  <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button class="preset-btn" onclick="speakText('Aiuto! Mi può aiutare?', 'it-IT')">🔊 발음 듣기</button>
+                    <button class="preset-btn" onclick="copyText('Aiuto! Mi può aiutare?')">📋 복사</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Card 6: Emergency Hotline -->
+          <div class="util-card">
+            <div class="util-card-header">
+              <i class="fa-solid fa-phone-volume" style="color:var(--terracotta);"></i>
+              <h3>긴급 상황 & 한국 영사 핫라인</h3>
+            </div>
+            <div class="hotline-list">
+              <div class="hotline-item">
+                <strong>대한민국 외교부 영사콜센터 (24시간)</strong>
+                <div class="phone-num">+82-2-3210-0404</div>
+              </div>
+              <div class="hotline-item">
+                <strong>주이탈리아 대한민국 대사관 (로마)</strong>
+                <div class="phone-num">+39-06-802461 (긴급: +39-335-185-0499)</div>
+              </div>
+              <div class="hotline-item">
+                <strong>주헝가리 대한민국 대사관 (부다페스트)</strong>
+                <div class="phone-num">+36-1-462-3080 (긴급: +36-30-922-2939)</div>
+              </div>
+              <div class="hotline-item">
+                <strong>유럽 긴급 통합 신고 번호 (경찰/구급차)</strong>
+                <div class="phone-num">112</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Tab 8: Checklist & Travel Tips (Essential Overseas & Italy Travel Preparation) -->
+      <section id="tab-checklist" class="tab-pane">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+          <div>
+            <h2 class="section-title" style="margin-bottom:4px;"><i class="fa-solid fa-clipboard-check" style="color:var(--terracotta);"></i> 해외 여행 사전 필수 준비 & 이탈리아 전용 체크리스트</h2>
+            <p style="color:var(--text-muted); font-size:0.92rem;">eSIM, 여행자보험, 소매치기 방지, 어댑터, ZTL 및 이탈리아 현지 준비물을 체크하여 완벽한 여행을 준비하세요.</p>
+          </div>
+          <div id="checklistProgressBadge" style="background:var(--navy-royal); color:#ffffff; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.9rem; box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-circle-check" style="color:var(--gold-accent);"></i> <span id="checklistProgressText">준비 달성률 계산 중...</span>
+          </div>
+        </div>
+        
+        <div class="checklist-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:20px;">
+          
+          <!-- Card 1: Essential Overseas Travel Pre-Check (eSIM, Insurance, Docs) -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--gold-primary); padding-bottom:10px;">
+              <i class="fa-solid fa-shield-halved" style="font-size:1.4rem; color:var(--terracotta);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">1. 해외 여행 필수 사전 행정 & 서류</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>📶 eSIM / 현지 로밍:</strong> 사전 구매 & QR코드 설치 (한국 SIM 핀 및 실물 분실주의)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🛡️ 해외 여행자 보험:</strong> 해외 상해/질병 의료비 최소 5천만원 + 휴대품 도난 보장 가입</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>passport 여권 실물:</strong> 유효기간 6개월 이상 잔여 확인 & 여권 사본(종이 + 스마트폰)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💳 트레블월렛 / 트레블로그:</strong> 해외 결제 전용 카드 발급 & 해외원화결제(DCC) 차단 설정</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💶 비상 현금 환전:</strong> 소액 유로 현금 지참 (€1, €2 유료주차장/화장실 동전 포함)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>📲 e-티켓 & 바우처:</strong> 항공권, 호텔 8곳, 바티칸 투어 e-바우처 PDF 오프라인 저장</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 2: Electronics & Italy Adapters -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--navy-royal); padding-bottom:10px;">
+              <i class="fa-solid fa-plug" style="font-size:1.4rem; color:var(--navy-royal);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">2. 전자기기 & 이탈리아 전원 멀티탭</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🔌 유럽/이탈리아 전용 멀티 어댑터:</strong> C타입(얇은 2핀) & L타입(3핀) 겸용 (한국 굵은 핀 헐거움 방지)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🔋 고속 보조배터리:</strong> 20,000mAh 이하 1~2개 (★반드시 기내 수하물 휴대 지참!)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🔌 접이식 멀티탭:</strong> 숙소 콘센트 구멍 부족 대비 (스마트폰 2대+카메라+워치 동시충전)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🚗 차량용 거치대 & 시거잭 충전기:</strong> 돌로미티 렌터카 구글맵/Waze 내비게이션용</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 3: Pickpocket Prevention & Safety -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--terracotta); padding-bottom:10px;">
+              <i class="fa-solid fa-lock" style="font-size:1.4rem; color:var(--terracotta);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">3. 소매치기 & 도난 방지 필수 용품</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>📱 핸드폰 도난방지 스트랩:</strong> 손목/가방 고정 (식당/테이블 위 단독 놓기 금지)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🎒 도난방지 크로스백:</strong> 지퍼를 앞으로 매는 가방 (로마/베네치아/나폴리 지하철 필수)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🔗 다이소 스프링 고리 & 미니 옷핀:</strong> 지갑/스마트폰 가방 안쪽 링 연결 & 가방 지퍼 열림 방지</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🔒 TSA 캐리어 자물쇠 & 와이어:</strong> 기차(이탈로/트랜이탈리아) 짐칸 와이어 고정</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💳 RFID 스키밍 방지 지갑:</strong> 카드 무선 스캔 도난 방지</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 4: Italy Clothing & Footwear Preparation -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--gold-accent); padding-bottom:10px;">
+              <i class="fa-solid fa-shirt" style="font-size:1.4rem; color:var(--gold-accent);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">4. 이탈리아 복장 규정 & 신발/패킹</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>☁️ 폭신한 구름 깔창 (아치 인솔):</strong> ★로마/베네치아 돌바닥(Cobblestone) 1.5만보 도보 & 트레킹 발 피로 완화</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>👗 바티칸/성당 복장 (Dress Code):</strong> 어깨 노출/민소매 금지, 무릎 위 반바지/치마 금지 (가디건/스카프 필수)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>👟 편안한 도보용 쿠션 운동화:</strong> 로마/베네치아 충격 흡수용 길들여진 쿠션화</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🩴 실내용 슬리퍼 (샤워 겸용):</strong> 유럽 호텔/B&B 실내 실내화 부재 및 긴 기내 비행 편의용</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🧥 돌로미티 산악 의류 (4~14°C):</strong> 경량 패딩, 바람막이 자켓, 트레킹화, 핫팩</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🧳 압축 파우치 / 의류 압축 팩:</strong> 15박 16일 두꺼운 옷/패딩 캐리어 공간 50% 절약</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🕶️ 지중해 햇빛 대책:</strong> 선글라스, UVA/UVB 선크림, 양산/우산</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🩱 포시타노 해수욕 준비물:</strong> 수영복, 아쿠아슈즈, 비치타월, 스마트폰 방수팩</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 5: Rental Car & Italy ZTL Rules -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--green-alpine); padding-bottom:10px;">
+              <i class="fa-solid fa-car-side" style="font-size:1.4rem; color:var(--green-alpine);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">5. 렌터카 서류 4종 & ZTL 단속 대비</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>📄 렌터카 픽업 필수 4종:</strong> 여권 + 한국 면허증 + 국제 면허증 + 주운전자 본인 실물 신용카드</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🚫 ZTL (통행제한구역) 카메라 대비:</strong> Waze 또는 ZTL Radar 내비 앱 사전 다운로드</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>⛽ 주유 셀프(Self) 모드 확인:</strong> 주유 후 트레비소 공항 반납 전 만유(Full Tank) 채우기</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🅿️ 주차 동전:</strong> 무인 유료 주차장 동전 지불용 소액 유로 동전 (€1, €2) 준비</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 6: Travel Pharmacy & Insect/Tick Repellent -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--purple-regal); padding-bottom:10px;">
+              <i class="fa-solid fa-briefcase-medical" style="font-size:1.4rem; color:var(--purple-regal);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">6. 해외 상비약 & 야외 진드기/해충 방지</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🐜 진드기 퇴치제 / 해충 기피제:</strong> ★돌로미티 산악 트레킹, 숲길 산책 & 야외 피크닉 살인진드기/모기 차단</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💊 소화제 & 지사제:</strong> 현지 식수/음식 물갈이 및 기름진 이탈리아 피자/파스타 대비</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💊 멀미약:</strong> 살레르노-포시타노 페리 및 돌로미티 산악 패스 굽이길 대비</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>💊 종합감기약 & 소염진통제:</strong> 시차 적응 및 돌로미티 일교차 몸살 대비</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🩹 상처 연고 & 반창고:</strong> 후시딘, 밴드, 버물리/모기물림약 (산악/해안가)</span></label></li>
+            </ul>
+          </div>
+
+          <!-- Card 7: Weather & Travel Hacks (Search Recommended Items) -->
+          <div class="check-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-sm);">
+            <div class="check-card-header" style="display:flex; align-items:center; gap:10px; margin-bottom:14px; border-bottom:2px solid var(--terracotta); padding-bottom:10px;">
+              <i class="fa-solid fa-cloud-showers-heavy" style="font-size:1.4rem; color:var(--terracotta);"></i>
+              <h3 style="font-size:1.15rem; color:var(--navy-royal); font-family:'Playfair Display', serif; font-weight:700;">7. 우천/수하물/위생 꿀템 (검색 추천)</h3>
+            </div>
+            <ul class="check-list" style="list-style:none; display:flex; flex-direction:column; gap:10px;">
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>👟 신발 방수 커버 (실리콘 레인 슈즈 커버):</strong> ★비 오는 날 무거운 장화 대신 신발 위에 씌우는 휴대용 방수 커버 (베네치아 침수 대비)</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🧴 100ml 소분 용기 & 고리형 워시백:</strong> 유럽 숙소 좁은 욕실 수건걸이에 걸어두고 쓰는 세면도구 세트</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>👜 접이식 폴딩백 (보조 가방):</strong> 귀국 시 이탈리아 와인/쇼핑 짐 증가 대비 캐리어 결합용 보조 가방</span></label></li>
+              <li><label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;"><input type="checkbox" class="chk-item" onchange="updateChecklistProgress()" checked> <span><strong>🦯 무릎 보호대 & 트레킹 스틱:</strong> 돌로미티 알프스 경사로 하산 시 무릎 관절 및 척추 부담 완화</span></label></li>
+            </ul>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Detail Modal -->
+    <div class="modal-backdrop" id="detailModal">
+      <div class="modal-container">
+        <button class="modal-close" id="modalClose">&times;</button>
+        <div class="modal-header" id="modalHeader">
+          <span class="modal-badge" id="modalBadge">항공편</span>
+          <h2 id="modalTitle">인천 ➔ 부다페스트 (OZ547)</h2>
+          <p id="modalSubtitle">2026년 9월 23일(수) 12:35 출발</p>
+        </div>
+        <div class="modal-body" id="modalBody">
+          <!-- Content dynamically set -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modalCloseBtn">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Custom Google Maps Route Modal -->
+    <div class="modal-backdrop" id="addRouteModal">
+      <div class="modal-container">
+        <button class="modal-close" id="addRouteModalClose">&times;</button>
+        <div class="modal-header">
+          <span class="modal-badge" style="background:var(--green-alpine);">돌로미티 / 여행 경로</span>
+          <h2>➕ 나만의 구글 맵 경로 저장하기 (DB 동기화)</h2>
+          <p>구글 맵 길찾기 링크나 원하는 이동 경로를 등록해두고 언제든 불러오세요.</p>
+        </div>
+        <div class="modal-body">
+          <div style="margin-bottom: 14px;">
+            <label style="font-weight:700; font-size:0.9rem; display:block; margin-bottom:4px;">경로 명칭</label>
+            <input type="text" id="inputRouteTitle" placeholder="예: 코르티나 ➔ 오르티세이 산악드라이빙" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="font-weight:700; font-size:0.9rem; display:block; margin-bottom:4px;">구간 상세 설명 (출발 - 목적지)</label>
+            <input type="text" id="inputRouteDesc" placeholder="예: Passo Gardena 경유 경치 우수 드라이빙 코스 (약 1시간 20분)" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="font-weight:700; font-size:0.9rem; display:block; margin-bottom:4px;">구글 맵 길찾기 URL (Google Maps Link)</label>
+            <input type="url" id="inputRouteUrl" placeholder="https://www.google.com/maps/dir/..." style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="font-weight:700; font-size:0.9rem; display:block; margin-bottom:4px;">카테고리</label>
+            <select id="selectRouteCategory" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px;">
+              <option value="돌로미티 드라이빙">돌로미티 드라이빙</option>
+              <option value="돌로미티 트레킹">돌로미티 트레킹</option>
+              <option value="도시 간 이동">도시 간 이동</option>
+              <option value="남부 해안 페리/드라이브">남부 해안 페리/드라이브</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer" style="gap:10px;">
+          <button class="btn-secondary" id="btnAddRouteCancel">취소</button>
+          <button class="btn-primary-gold" id="btnSaveCustomRoute">경로 DB에 저장하기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add / Edit Schedule Item & Map Pin Modal -->
+    <div class="modal-backdrop" id="scheduleModal">
+      <div class="modal-container" style="max-width: 650px;">
+        <button class="modal-close" id="scheduleModalClose">&times;</button>
+        <div class="modal-header">
+          <span class="modal-badge" style="background:var(--navy-royal);" id="scheduleModalBadge">일정 & 지도 핀 관리</span>
+          <h2 id="scheduleModalTitle">➕ 새 일정 / 장소 핀 추가 (DB 실시간 연동)</h2>
+          <p id="scheduleModalSubtitle">일정 내용과 지도 위경도를 입력하면 타임라인과 지도가 실시간으로 업데이트됩니다.</p>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="schedItemId" value="">
+          
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">여행 일차 (Day)</label>
+              <select id="schedDaySelect" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+                <option value="1">DAY 1 (09/23 - 부다페스트)</option>
+                <option value="2">DAY 2 (09/24 - 돌로미티 동부)</option>
+                <option value="3">DAY 3 (09/25 - 트레치메 라바레도)</option>
+                <option value="4">DAY 4 (09/26 - 브라이에스/발가르데나)</option>
+                <option value="5">DAY 5 (09/27 - 세체다/알페디시우시)</option>
+                <option value="6">DAY 6 (09/28 - 돌로미티 패스 드라이빙)</option>
+                <option value="7">DAY 7 (09/29 - 베네치아 메스트레)</option>
+                <option value="8">DAY 8 (09/30 - 베네치아 본섬/부라노)</option>
+                <option value="9">DAY 9 (10/01 - 로마 시내)</option>
+                <option value="10">DAY 10 (10/02 - 바티칸 시국)</option>
+                <option value="11">DAY 11 (10/03 - 살레르노/포시타노)</option>
+                <option value="12">DAY 12 (10/04 - 포시타노/아말피)</option>
+                <option value="13">DAY 13 (10/05 - 포시타노 힐링)</option>
+                <option value="14">DAY 14 (10/06 - 나폴리 시내)</option>
+                <option value="15">DAY 15 (10/07 - 나폴리/부다페스트/귀국)</option>
+                <option value="16">DAY 16 (10/08 - 인천 도착)</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">도시 (City)</label>
+              <input type="text" id="schedCity" placeholder="예: 부다페스트, 로마, 포시타노..." style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">일정 / 장소 제목 (Title)</label>
+            <input type="text" id="schedTitle" placeholder="예: 🏰 세체니 온천 & 다뉴브강 야경 유람선" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">날짜 (Date)</label>
+              <input type="date" id="schedDate" value="2026-09-23" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+            </div>
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">요일 (Day of Week)</label>
+              <select id="schedDayOfWeek" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+                <option value="수">수요일</option>
+                <option value="목">목요일</option>
+                <option value="금">금요일</option>
+                <option value="토">토요일</option>
+                <option value="일">일요일</option>
+                <option value="월">월요일</option>
+                <option value="화">화요일</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">이동 및 일정 세부 내용 (Detail)</label>
+            <textarea id="schedDetail" rows="3" placeholder="상세 이동 경로, 가이드 미팅 시간, 팁 등 작성" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px; font-family:inherit;"></textarea>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">당일 숙소 (Hotel)</label>
+              <input type="text" id="schedHotel" placeholder="예: Hotel Nevada" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+            </div>
+            <div>
+              <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">관련 예약 / 티켓 번호</label>
+              <input type="text" id="schedBookingRef" placeholder="예: 예약번호 OZ547" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">참고사항 / 체크 팁 (Notes)</label>
+            <input type="text" id="schedNotes" placeholder="예: 06:30 산장 주차 예약 입장 필수" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+
+          <!-- Lat & Lng Geocoding Helper -->
+          <div style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-weight:700; color:var(--navy-royal); font-size:0.9rem;">
+                <i class="fa-solid fa-map-pin" style="color:var(--terracotta);"></i> 지도 핀 위치 (위도 Lat / 경도 Lng)
+              </span>
+              <button type="button" onclick="autoGeocodeLocation()" style="background:var(--navy-royal); color:#ffffff; border:none; padding:5px 12px; border-radius:6px; font-size:0.8rem; font-weight:700; cursor:pointer;">
+                <i class="fa-solid fa-magnifying-glass-location"></i> 🔍 장소명으로 위치(위경도) 자동 검색
+              </button>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+              <div>
+                <label style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">위도 (Latitude)</label>
+                <input type="number" step="any" id="schedLat" placeholder="47.4979" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">경도 (Longitude)</label>
+                <input type="number" step="any" id="schedLng" placeholder="19.0402" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+            </div>
+            <div id="geocodeResultText" style="font-size:0.8rem; color:var(--navy-royal); font-weight:600; margin-top:6px;"></div>
+          </div>
+
+        </div>
+        <div class="modal-footer" style="gap:10px;">
+          <button class="btn-secondary" id="scheduleModalCancel">취소</button>
+          <button class="btn-primary-gold" id="btnSaveSchedule" onclick="saveScheduleItem()">DB에 저장 및 지도 연동하기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1-Depth Sub-Item / Waypoint Add/Edit Modal -->
+    <div class="modal-backdrop" id="waypointModal">
+      <div class="modal-container" style="max-width: 600px;">
+        <button class="modal-close" id="waypointModalClose">&times;</button>
+        <div class="modal-header">
+          <span class="modal-badge" style="background:var(--terracotta);" id="waypointModalBadge">1-Depth 세부 일정</span>
+          <h2 id="waypointModalTitle">➕ 세부 장소 / 일정 핀 추가 (DB 실시간 연동)</h2>
+          <p id="waypointModalSubtitle">선택한 일차의 타임라인 및 지도에 세부 핀과 일정을 추가합니다.</p>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="wpEditIndex" value="-1">
+          
+          <div style="margin-bottom:12px;">
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">장소 / 일정 명칭 (Title/Name)</label>
+            <input type="text" id="wpName" placeholder="예: 1. 🛫 인천국제공항 T2 또는 ⛰️ 트레치메 라바레도" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px;">
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:4px;">시간 / 일정 세부 설명 (Time & Detail)</label>
+            <textarea id="wpDesc" rows="3" placeholder="예: 06:30 아우론조 산장 주차장 입장 후 순환 트레킹 (약 3시간 30분 소요)" style="width:100%; padding:9px; border:1px solid var(--border-color); border-radius:6px; font-family:inherit;"></textarea>
+          </div>
+
+          <!-- Lat & Lng Geocoding Helper -->
+          <div style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-weight:700; color:var(--navy-royal); font-size:0.9rem;">
+                <i class="fa-solid fa-map-pin" style="color:var(--terracotta);"></i> 지도 핀 위치 (위도 Lat / 경도 Lng)
+              </span>
+              <button type="button" onclick="autoGeocodeWaypointLocation()" style="background:var(--navy-royal); color:#ffffff; border:none; padding:5px 12px; border-radius:6px; font-size:0.8rem; font-weight:700; cursor:pointer;">
+                <i class="fa-solid fa-magnifying-glass-location"></i> 🔍 장소명으로 위치 자동 검색
+              </button>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+              <div>
+                <label style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">위도 (Latitude)</label>
+                <input type="number" step="any" id="wpLat" placeholder="47.4979" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+              <div>
+                <label style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">경도 (Longitude)</label>
+                <input type="number" step="any" id="wpLng" placeholder="19.0402" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px;">
+              </div>
+            </div>
+            <div id="wpGeocodeResultText" style="font-size:0.8rem; color:var(--navy-royal); font-weight:600; margin-top:6px;"></div>
+          </div>
+        </div>
+        <div class="modal-footer" style="gap:10px;">
+          <button class="btn-secondary" id="waypointModalCancel">취소</button>
+          <button class="btn-primary-gold" onclick="saveWaypointItem()">1-Depth 타임라인 & DB 저장하기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="main-footer no-print">
+      <p>European Vintage Ivory Theme | SQLite Database Integrated Edition for YoungHo & Dahye</p>
+    </footer>
+  </div>
+
+  <!-- Leaflet JS & Google Maps API for Interactive Route Map -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="app.js?v=20260920_01"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?callback=initGoogleMapsApi&libraries=geometry" async defer></script>
+  
+  <!-- PWA Service Worker Registration for 100% Offline Access -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(registration) {
+          console.log('[PWA] ServiceWorker registered with scope:', registration.scope);
+        }, function(err) {
+          console.log('[PWA] ServiceWorker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
