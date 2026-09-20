@@ -9,10 +9,27 @@ import sqlite3
 import os
 import urllib.parse
 
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'europe_travel.db')
+import shutil
+
+DB_SRC = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'europe_travel.db')
+if not os.path.exists(DB_SRC):
+    DB_SRC = os.path.join(os.path.dirname(__file__), 'europe_travel.db')
+
+def get_db_file():
+    # In Vercel / read-only lambda environment, use /tmp/europe_travel.db
+    if os.environ.get('VERCEL') or not os.access(os.path.dirname(DB_SRC) or '.', os.W_OK):
+        tmp_db = '/tmp/europe_travel.db'
+        if not os.path.exists(tmp_db) and os.path.exists(DB_SRC):
+            try:
+                shutil.copyfile(DB_SRC, tmp_db)
+            except Exception as e:
+                print("Failed to copy DB to /tmp:", e)
+        return tmp_db
+    return DB_SRC
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    db_file = get_db_file()
+    conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -93,61 +110,70 @@ class handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path.endswith('/all-data') or parsed.path.endswith('/all-data/'):
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json; charset=utf-8')
-            self.end_headers()
+            try:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
 
-            conn = sqlite3.connect(DB_FILE)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+                conn = sqlite3.connect(get_db_file())
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
 
-            cursor.execute('SELECT * FROM schedule ORDER BY id ASC')
-            schedules = []
-            for r in cursor.fetchall():
-                item = dict(r)
+                cursor.execute('SELECT * FROM schedule ORDER BY id ASC')
+                schedules = []
+                for r in cursor.fetchall():
+                    item = dict(r)
+                    try:
+                        item['category'] = json.loads(item['category'])
+                    except:
+                        pass
+                    schedules.append(item)
+
+                cursor.execute('SELECT * FROM bookings')
+                bookings = [dict(r) for r in cursor.fetchall()]
+
+                cursor.execute('SELECT * FROM saved_routes')
+                routes = [dict(r) for r in cursor.fetchall()]
+
+                cursor.execute('SELECT * FROM expenses ORDER BY date DESC, id DESC')
+                expenses = [dict(r) for r in cursor.fetchall()]
+
+                cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
+                cursor.execute('SELECT indices_json FROM checklist_state WHERE id = 1')
+                chk_row = cursor.fetchone()
+                checklist_indices = json.loads(chk_row[0]) if chk_row and chk_row[0] else []
+
+                cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
+                cursor.execute('SELECT * FROM custom_checklist')
+                custom_checklist = [dict(r) for r in cursor.fetchall()]
+
+                conn.close()
+
+                response_data = {
+                    "schedule": schedules,
+                    "bookings": bookings,
+                    "routes": routes,
+                    "expenses": expenses,
+                    "checklist_indices": checklist_indices,
+                    "custom_checklist": custom_checklist
+                }
+
+                self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
                 try:
-                    item['category'] = json.loads(item['category'])
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
                 except:
                     pass
-                schedules.append(item)
-
-            cursor.execute('SELECT * FROM bookings')
-            bookings = [dict(r) for r in cursor.fetchall()]
-
-            cursor.execute('SELECT * FROM saved_routes')
-            routes = [dict(r) for r in cursor.fetchall()]
-
-            cursor.execute('SELECT * FROM expenses ORDER BY date DESC, id DESC')
-            expenses = [dict(r) for r in cursor.fetchall()]
-
-            cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
-            cursor.execute('SELECT indices_json FROM checklist_state WHERE id = 1')
-            chk_row = cursor.fetchone()
-            checklist_indices = json.loads(chk_row[0]) if chk_row and chk_row[0] else []
-
-            cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
-            cursor.execute('SELECT * FROM custom_checklist')
-            custom_checklist = [dict(r) for r in cursor.fetchall()]
-
-            conn.close()
-
-            response_data = {
-                "schedule": schedules,
-                "bookings": bookings,
-                "routes": routes,
-                "expenses": expenses,
-                "checklist_indices": checklist_indices,
-                "custom_checklist": custom_checklist
-            }
-
-            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
             return
 
         elif parsed.path.endswith('/checklist') or parsed.path.endswith('/checklist/'):
             self.send_response(200)
             self.send_header('Content-type', 'application/json; charset=utf-8')
             self.end_headers()
-            conn = sqlite3.connect(DB_FILE)
+            conn = sqlite3.connect(get_db_file())
             cursor = conn.cursor()
             cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
             cursor.execute('SELECT indices_json FROM checklist_state WHERE id = 1')
@@ -161,7 +187,7 @@ class handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'application/json; charset=utf-8')
             self.end_headers()
-            conn = sqlite3.connect(DB_FILE)
+            conn = sqlite3.connect(get_db_file())
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
@@ -184,7 +210,7 @@ class handler(http.server.BaseHTTPRequestHandler):
         if parsed.path.endswith('/custom-checklist/save'):
             try:
                 data = json.loads(post_data)
-                conn = sqlite3.connect(DB_FILE)
+                conn = sqlite3.connect(get_db_file())
                 cursor = conn.cursor()
                 cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
                 cursor.execute('''
@@ -206,7 +232,7 @@ class handler(http.server.BaseHTTPRequestHandler):
         elif parsed.path.endswith('/custom-checklist/delete'):
             try:
                 data = json.loads(post_data)
-                conn = sqlite3.connect(DB_FILE)
+                conn = sqlite3.connect(get_db_file())
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM custom_checklist WHERE id = ?', (data['id'],))
                 conn.commit()
@@ -225,7 +251,7 @@ class handler(http.server.BaseHTTPRequestHandler):
             try:
                 data = json.loads(post_data)
                 indices_json = json.dumps(data.get('indices', []))
-                conn = sqlite3.connect(DB_FILE)
+                conn = sqlite3.connect(get_db_file())
                 cursor = conn.cursor()
                 cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
                 cursor.execute('INSERT OR REPLACE INTO checklist_state (id, indices_json) VALUES (1, ?)', (indices_json,))
@@ -244,7 +270,7 @@ class handler(http.server.BaseHTTPRequestHandler):
         if parsed.path.endswith('/routes/add'):
             try:
                 data = json.loads(post_data)
-                conn = sqlite3.connect(DB_FILE)
+                conn = sqlite3.connect(get_db_file())
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO saved_routes (id, category, title, desc, url)
@@ -266,7 +292,7 @@ class handler(http.server.BaseHTTPRequestHandler):
         if parsed.path.endswith('/expenses/add'):
             try:
                 data = json.loads(post_data)
-                conn = sqlite3.connect(DB_FILE)
+                conn = sqlite3.connect(get_db_file())
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO expenses (id, date, payer, item, amount, currency, krw_amount, category)
