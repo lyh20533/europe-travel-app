@@ -2255,7 +2255,7 @@ window.deleteWaypointItem = function(wpIdx) {
 };
 
 // =========================================================
-// Checklist Progress & LocalStorage Persistence Engine
+// Checklist Progress & Persistence Engine (LocalStorage + Backend DB)
 // =========================================================
 window.updateChecklistProgress = function() {
   const checkboxes = document.querySelectorAll('#tab-checklist .chk-item');
@@ -2278,25 +2278,54 @@ window.updateChecklistProgress = function() {
     textElem.innerText = `완료: ${checked} / ${total} 항목 (${pct}%)`;
   }
 
+  // 1. Save in LocalStorage immediately
   try {
     localStorage.setItem('italy_checklist_checked_indices', JSON.stringify(checkedStates));
   } catch(e) {}
+
+  // 2. Sync to Backend SQLite DB
+  fetch('/api/checklist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ indices: checkedStates })
+  }).catch(() => {});
 };
 
 window.initChecklistState = function() {
   const checkboxes = document.querySelectorAll('#tab-checklist .chk-item');
   if (!checkboxes || checkboxes.length === 0) return;
 
+  // Set all to false by default
+  checkboxes.forEach(chk => { chk.checked = false; });
+
   try {
     const saved = localStorage.getItem('italy_checklist_checked_indices');
     if (saved !== null) {
       const checkedIndices = JSON.parse(saved);
-      checkboxes.forEach((chk, index) => {
-        chk.checked = checkedIndices.includes(index);
-      });
+      if (Array.isArray(checkedIndices)) {
+        checkboxes.forEach((chk, index) => {
+          chk.checked = checkedIndices.includes(index);
+        });
+      }
     }
   } catch(e) {}
 
   updateChecklistProgress();
+
+  // Also sync from backend SQLite DB if available
+  fetch('/api/checklist')
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.indices)) {
+        checkboxes.forEach((chk, index) => {
+          chk.checked = data.indices.includes(index);
+        });
+        updateChecklistProgress();
+        try {
+          localStorage.setItem('italy_checklist_checked_indices', JSON.stringify(data.indices));
+        } catch(e) {}
+      }
+    })
+    .catch(() => {});
 };
 

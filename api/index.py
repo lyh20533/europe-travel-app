@@ -132,6 +132,20 @@ class handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
             return
 
+        elif parsed.path.endswith('/checklist') or parsed.path.endswith('/checklist/'):
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json; charset=utf-8')
+            self.end_headers()
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
+            cursor.execute('SELECT indices_json FROM checklist_state WHERE id = 1')
+            row = cursor.fetchone()
+            conn.close()
+            indices = json.loads(row[0]) if row and row[0] else []
+            self.wfile.write(json.dumps({"indices": indices}).encode('utf-8'))
+            return
+
         self.send_response(404)
         self.end_headers()
         self.wfile.write(b'{"error": "Not Found"}')
@@ -141,6 +155,26 @@ class handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
+
+        if parsed.path.endswith('/checklist') or parsed.path.endswith('/checklist/'):
+            try:
+                data = json.loads(post_data)
+                indices_json = json.dumps(data.get('indices', []))
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute('CREATE TABLE IF NOT EXISTS checklist_state (id INTEGER PRIMARY KEY, indices_json TEXT)')
+                cursor.execute('INSERT OR REPLACE INTO checklist_state (id, indices_json) VALUES (1, ?)', (indices_json,))
+                conn.commit()
+                conn.close()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
 
         if parsed.path.endswith('/routes/add'):
             try:
