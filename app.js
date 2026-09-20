@@ -2473,3 +2473,40 @@ window.renderCustomChecklistItems = function() {
   });
 };
 
+window.uncheckAllChecklistItems = function() {
+  if (!confirm("모든 준비물 항목의 체크를 해제하시겠습니까?")) return;
+
+  const checkboxes = document.querySelectorAll('#tab-checklist .chk-item');
+  if (checkboxes) {
+    checkboxes.forEach(chk => { chk.checked = false; });
+  }
+
+  if (Array.isArray(customChecklistItems)) {
+    customChecklistItems.forEach(item => { item.checked = 0; });
+    saveCustomChecklistItemsState();
+  }
+
+  // Clear LocalStorage & Sync to DB
+  try {
+    localStorage.setItem('italy_checklist_checked_indices', JSON.stringify([]));
+  } catch(e) {}
+
+  fetch('/api/checklist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ indices: [] })
+  }).catch(() => {});
+
+  if (customChecklistItems && customChecklistItems.length > 0) {
+    customChecklistItems.forEach(item => {
+      fetch('/api/custom-checklist/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      }).catch(() => {});
+    });
+  }
+
+  updateChecklistProgress();
+};
+
