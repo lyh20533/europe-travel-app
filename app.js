@@ -2318,7 +2318,9 @@ window.initChecklistState = function() {
     .then(data => {
       if (data && Array.isArray(data.indices)) {
         checkboxes.forEach((chk, index) => {
-          chk.checked = data.indices.includes(index);
+          if (!chk.classList.contains('custom-chk')) {
+            chk.checked = data.indices.includes(index);
+          }
         });
         updateChecklistProgress();
         try {
@@ -2327,5 +2329,147 @@ window.initChecklistState = function() {
       }
     })
     .catch(() => {});
+
+  // Load Custom Checklist Items from LocalStorage
+  try {
+    const savedCustom = localStorage.getItem('italy_custom_checklist_items');
+    if (savedCustom) {
+      customChecklistItems = JSON.parse(savedCustom) || [];
+      renderCustomChecklistItems();
+      updateChecklistProgress();
+    }
+  } catch(e) {}
+
+  // Sync Custom Checklist Items from SQLite DB
+  fetch('/api/custom-checklist')
+    .then(res => res.json())
+    .then(data => {
+      if (Array.isArray(data)) {
+        customChecklistItems = data;
+        renderCustomChecklistItems();
+        updateChecklistProgress();
+        saveCustomChecklistItemsState();
+      }
+    })
+    .catch(() => {});
+};
+
+// =========================================================
+// Custom User Checklist Item Management Engine
+// =========================================================
+let customChecklistItems = [];
+
+window.openCustomChecklistModal = function(defaultCategory = 6) {
+  const catSelect = document.getElementById('customItemCategorySelect');
+  const textInput = document.getElementById('customItemTextInput');
+  if (catSelect) catSelect.value = defaultCategory.toString();
+  if (textInput) textInput.value = '';
+
+  const modal = document.getElementById('customChecklistModal');
+  if (modal) modal.classList.add('active');
+};
+
+window.closeCustomChecklistModal = function() {
+  const modal = document.getElementById('customChecklistModal');
+  if (modal) modal.classList.remove('active');
+};
+
+window.submitCustomChecklistItem = function() {
+  const catSelect = document.getElementById('customItemCategorySelect');
+  const textInput = document.getElementById('customItemTextInput');
+  const text = textInput ? textInput.value.trim() : '';
+  const cardIdx = catSelect ? parseInt(catSelect.value) : 6;
+
+  if (!text) {
+    alert("준비물 항목 이름을 입력해 주세요.");
+    return;
+  }
+
+  const newItem = {
+    id: 'custom_' + Date.now(),
+    card_idx: cardIdx,
+    text: text,
+    checked: 0
+  };
+
+  customChecklistItems.push(newItem);
+  renderCustomChecklistItems();
+  updateChecklistProgress();
+  saveCustomChecklistItemsState();
+
+  // Sync with DB
+  fetch('/api/custom-checklist/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newItem)
+  }).catch(() => {});
+
+  closeCustomChecklistModal();
+};
+
+window.toggleCustomChecklistItem = function(id, isChecked) {
+  const item = customChecklistItems.find(x => x.id === id);
+  if (item) {
+    item.checked = isChecked ? 1 : 0;
+    saveCustomChecklistItemsState();
+    updateChecklistProgress();
+
+    fetch('/api/custom-checklist/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item)
+    }).catch(() => {});
+  }
+};
+
+window.deleteCustomChecklistItem = function(id, event) {
+  if (event) event.stopPropagation();
+  if (!confirm("이 나만의 준비물 항목을 삭제하시겠습니까?")) return;
+
+  customChecklistItems = customChecklistItems.filter(x => x.id !== id);
+  renderCustomChecklistItems();
+  updateChecklistProgress();
+  saveCustomChecklistItemsState();
+
+  fetch('/api/custom-checklist/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id })
+  }).catch(() => {});
+};
+
+function saveCustomChecklistItemsState() {
+  try {
+    localStorage.setItem('italy_custom_checklist_items', JSON.stringify(customChecklistItems));
+  } catch(e) {}
+}
+
+window.renderCustomChecklistItems = function() {
+  document.querySelectorAll('.custom-item-li').forEach(el => el.remove());
+
+  const checkCards = document.querySelectorAll('#tab-checklist .check-card');
+  if (!checkCards || checkCards.length === 0) return;
+
+  customChecklistItems.forEach(item => {
+    const cardIndex = (item.card_idx || 1) - 1;
+    if (cardIndex >= 0 && cardIndex < checkCards.length) {
+      const ul = checkCards[cardIndex].querySelector('ul.check-list');
+      if (ul) {
+        const li = document.createElement('li');
+        li.className = 'custom-item-li';
+        li.id = item.id;
+        li.innerHTML = `
+          <label style="display:flex; align-items:flex-start; justify-content:space-between; width:100%; gap:8px; cursor:pointer;">
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+              <input type="checkbox" class="chk-item custom-chk" data-id="${item.id}" ${item.checked ? 'checked' : ''} onchange="toggleCustomChecklistItem('${item.id}', this.checked)">
+              <span><strong>${item.text}</strong> <span style="font-size:0.75rem; background:rgba(212,175,55,0.2); color:var(--navy-royal); border:1px solid var(--gold-primary); padding:1px 6px; border-radius:10px; margin-left:4px; font-weight:600;">사용자 추가</span></span>
+            </div>
+            <button type="button" onclick="deleteCustomChecklistItem('${item.id}', event)" title="항목 삭제" style="background:none; border:none; color:#d9534f; cursor:pointer; font-size:1.1rem; padding:0 4px; line-height:1;">&times;</button>
+          </label>
+        `;
+        ul.appendChild(li);
+      }
+    }
+  });
 };
 

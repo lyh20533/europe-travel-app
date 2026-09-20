@@ -532,10 +532,15 @@
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
           <div>
             <h2 class="section-title" style="margin-bottom:4px;"><i class="fa-solid fa-clipboard-check" style="color:var(--terracotta);"></i> 해외 여행 사전 필수 준비 & 이탈리아 전용 체크리스트</h2>
-            <p style="color:var(--text-muted); font-size:0.92rem;">eSIM, 여행자보험, 소매치기 방지, 어댑터, ZTL 및 이탈리아 현지 준비물을 체크하여 완벽한 여행을 준비하세요.</p>
+            <p style="color:var(--text-muted); font-size:0.92rem;">eSIM, 여행자보험, 소매치기 방지, 샤워기필터, 상비약, 다이소 꿀템 등을 체크하고 나만의 준비물도 자유롭게 추가하세요.</p>
           </div>
-          <div id="checklistProgressBadge" style="background:var(--navy-royal); color:#ffffff; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.9rem; box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; gap:8px;">
-            <i class="fa-solid fa-circle-check" style="color:var(--gold-accent);"></i> <span id="checklistProgressText">준비 달성률 계산 중...</span>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div id="checklistProgressBadge" style="background:var(--navy-royal); color:#ffffff; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.9rem; box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; gap:8px;">
+              <i class="fa-solid fa-circle-check" style="color:var(--gold-accent);"></i> <span id="checklistProgressText">준비 달성률 계산 중...</span>
+            </div>
+            <button onclick="openCustomChecklistModal()" style="background:linear-gradient(135deg, var(--gold-primary), var(--gold-accent)); color:var(--navy-royal); border:none; padding:8px 18px; border-radius:30px; font-weight:700; font-size:0.9rem; cursor:pointer; box-shadow:var(--shadow-sm); display:inline-flex; align-items:center; gap:6px; transition:transform 0.15s ease;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+              <i class="fa-solid fa-plus-circle"></i> <span>나만의 준비물 직접 추가</span>
+            </button>
           </div>
         </div>
         
@@ -895,6 +900,40 @@
         <div class="modal-footer" style="gap:10px;">
           <button class="btn-secondary" id="waypointModalCancel">취소</button>
           <button class="btn-primary-gold" onclick="saveWaypointItem()">1-Depth 타임라인 & DB 저장하기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Custom Checklist Modal -->
+    <div class="modal-backdrop" id="customChecklistModal">
+      <div class="modal-container" style="max-width:480px;">
+        <button class="modal-close" onclick="closeCustomChecklistModal()">&times;</button>
+        <div class="modal-header">
+          <span class="modal-badge" style="background:var(--gold-accent); color:var(--navy-royal);">준비물 직접 추가</span>
+          <h2 style="font-size:1.25rem;"><i class="fa-solid fa-plus-circle" style="color:var(--gold-primary);"></i> 나만의 준비물 항목 추가</h2>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:14px; padding:12px 0;">
+          <div>
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:6px; color:var(--navy-royal);">카테고리 선택</label>
+            <select id="customItemCategorySelect" style="width:100%; padding:10px 14px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-main); font-size:0.92rem;">
+              <option value="1">1. 해외 여행 필수 사전 행정 & 서류</option>
+              <option value="2">2. 샤워기 필터, 전자기기 & 멀티 어댑터</option>
+              <option value="3">3. 소매치기 & 도난 방지 필수 용품</option>
+              <option value="4">4. 이탈리아 복장 규정 & 신발/패킹</option>
+              <option value="5">5. 렌터카 서류 4종 & ZTL 단속 대비</option>
+              <option value="6" selected>6. 해외 상비약 & 야외 진드기/해충 방지</option>
+              <option value="7">7. 우천/수하물/위생 꿀템 & 한식 비상식량</option>
+              <option value="8">8. 다이소(Daiso) 필수 구매 꿀템 9선</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-weight:700; font-size:0.88rem; display:block; margin-bottom:6px; color:var(--navy-royal);">준비물 항목 이름</label>
+            <input type="text" id="customItemTextInput" placeholder="예: 인공눈물 3개, 아스피린, 손톱깎이 세트..." style="width:100%; padding:10px 14px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-main); font-size:0.95rem;">
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; margin-top:14px;">
+          <button class="btn-cancel" onclick="closeCustomChecklistModal()" style="padding:8px 18px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-subtle); cursor:pointer;">취소</button>
+          <button class="btn-save" onclick="submitCustomChecklistItem()" style="padding:8px 20px; border-radius:8px; border:none; background:var(--gold-primary); color:var(--navy-royal); font-weight:700; cursor:pointer;">➕ 항목 등록하기</button>
         </div>
       </div>
     </div>

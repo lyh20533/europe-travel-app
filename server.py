@@ -280,12 +280,66 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"indices": indices}).encode('utf-8'))
             return
 
+        elif parsed.path == '/api/custom-checklist':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json; charset=utf-8')
+            self.end_headers()
+            conn = sqlite3.connect(DB_FILE)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
+            cursor.execute('SELECT * FROM custom_checklist')
+            rows = [dict(r) for r in cursor.fetchall()]
+            conn.close()
+            self.wfile.write(json.dumps(rows, ensure_ascii=False).encode('utf-8'))
+            return
+
         return super().do_GET()
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
+
+        if parsed.path == '/api/custom-checklist/save':
+            try:
+                data = json.loads(post_data)
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute('CREATE TABLE IF NOT EXISTS custom_checklist (id TEXT PRIMARY KEY, card_idx INTEGER, text TEXT, checked INTEGER)')
+                cursor.execute('''
+                    INSERT OR REPLACE INTO custom_checklist (id, card_idx, text, checked)
+                    VALUES (?, ?, ?, ?)
+                ''', (data['id'], data['card_idx'], data['text'], 1 if data.get('checked') else 0))
+                conn.commit()
+                conn.close()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/custom-checklist/delete':
+            try:
+                data = json.loads(post_data)
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM custom_checklist WHERE id = ?', (data['id'],))
+                conn.commit()
+                conn.close()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+            return
 
         if parsed.path == '/api/checklist':
             try:
